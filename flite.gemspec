@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
   spec.version       = Flite::VERSION
   spec.authors       = ["Kubo Takehiro"]
   spec.email         = ["kubo@jiubao.org"]
-  spec.extensions    = ["ext/flite/extconf.rb"]
+  spec.extensions    = ["ext/flite/extconf.rb"] if gem_platform == Gem::Platform::RUBY
   spec.summary       = %q{a small speech synthesis library}
   spec.description   = <<EOS
 Ruby-flite is a small speech synthesis library using CMU flite[http://cmuflite.org].
@@ -40,6 +40,7 @@ EOS
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ["lib"]
+  spec.required_ruby_version = '>= 2.0.0'
 
   spec.add_development_dependency "bundler", "~> 1.7"
   spec.add_development_dependency "rake", "~> 10.0"
