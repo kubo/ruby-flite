@@ -58,7 +58,7 @@ Or install it yourself as:
 ```ruby
 require 'flite'
 
-# output to the speeker.
+# output to the PC speaker.
 "Hello World!".to_speech
 
 # save as a WAVE file
@@ -80,7 +80,7 @@ Flite.list_builtin_voices
 # create a voice. 'slt' is a voice name.
 voice = Flite::Voice.new("slt")
 
-# output to the speeker.
+# output to the PC speaker.
 voice.speech("Hello World!")
 
 # save as a WAVE file
@@ -107,7 +107,7 @@ Flite.default_voice = 'rms'
 
 * `String#to_speech("play")` and `Flite::Voice#speech(text, "play")`
   don't save wave data to the specified file `play`. They output speech
-  data to the speaker instead.
+  data to the PC speaker instead.
 
 * `String#to_speech("stream")`, `String#to_speech("none")`,
   `Flite::Voice#speech(text, "stream")` and `Flite::Voice#speech(text, "none")`
