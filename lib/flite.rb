@@ -33,7 +33,7 @@
 
 require "flite/version"
 RUBY_VERSION =~ /(\d+).(\d+)/
-require "flite/flite_#{$1}#{$2}"
+require "flite_#{$1}#{$2}0"
 
 module Flite
   @@default_voice = Flite::Voice.new

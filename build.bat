@@ -12,7 +12,7 @@ call e:\ruby\devkit-mingw64-32\devkitvars.bat
 del lib\flite_*.so
 call :compile flite_210.so win32 213p242-32
 call :compile flite_200.so win32 200p0-32
-call :build_gem win64
+call :build_gem win32
 
 goto end
 
