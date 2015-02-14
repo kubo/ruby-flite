@@ -49,7 +49,7 @@ instead of above commands.
     $ bundle config --local build.flite --with-voices=kal --with-langs=eng
     $ bundle
 
-Or install it yourself as:
+Or
 
     $ gem install flite -- --with-voices=kal --with-langs=eng
 
@@ -62,10 +62,10 @@ require 'flite'
 "Hello World!".to_speech
 
 # save as a WAVE file
-"Hello World!".to_speech("hello_world.wave")
+"Hello World!".to_speech("hello_world.wav")
 
 # write to an I/O object if it responds to 'write'.
-File.open("hello_world.wave", "wb") do |f|
+File.open("hello_world.wav", "wb") do |f|
   "Hello World!".to_speech(f)
 end
 ```
@@ -84,10 +84,10 @@ voice = Flite::Voice.new("slt")
 voice.speech("Hello World!")
 
 # save as a WAVE file
-voice.speech("Hello World!", "hello_world.wave")
+voice.speech("Hello World!", "hello_world.wav")
 
 # write to an I/O object if it responds to 'write'.
-File.open("hello_world.wave", "wb") do |f|
+File.open("hello_world.wav", "wb") do |f|
   voice.speech("Hello World!", f)
 end
 
@@ -95,9 +95,10 @@ end
 Flite.default_voice = 'rms'
 ```
 
-## Sample Application
+## Sample Applications
 
-* [saytime.rb](https://github.com/kubo/ruby-flite/blob/master/bin/saytime.rb)
+* [saytime.rb](https://github.com/kubo/ruby-flite/blob/master/bin/saytime.rb) - talking clock
+* [speech_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speech_web_server.rb) - Web server replying synthesized speech
 
 ## Restrictions
 
@@ -123,6 +124,12 @@ Flite.default_voice = 'rms'
 * CMU Flite is licensed under BSD-like license.
   See http://www.festvox.org/flite/download.html
 
+## Related Works
+
+* [flite4r](http://www.rubydoc.info/gems/flite4r/) - Flite for Ruby (GPL)
+* [FestivalTTS4r](https://github.com/spejman/festivaltts4r) - Festival Text-To-Speech for Ruby
+* [saytime](http://acme.com/software/saytime/) - talking clock for SPARCstations
+ 
 ## Contributing
 
 1. Fork it ( https://github.com/kubo/ruby-flite/fork )
