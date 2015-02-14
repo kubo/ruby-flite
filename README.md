@@ -1,6 +1,6 @@
-# ruby-flite
+# Ruby Flite
 
-Ruby-flite is a small speech synthesis library for ruby using [CMU Flite](http://cmuflite.org).
+Ruby Flite is a small speech synthesis library for ruby using [CMU Flite](http://cmuflite.org).
 
 CMU Flite (festival-lite) is a small, fast run-time synthesis engine developed
 at CMU and primarily designed for small embedded machines and/or large
@@ -13,12 +13,6 @@ voices built using the [FestVox](http://festvox.org/) suite of voice building to
 * CMU Flite 1.4 and 2.0.
 
 ## Installation
-
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'flite'
-```
 
 Install [CMU Flite](http://cmuflite.org):
 
@@ -36,20 +30,11 @@ yum install flite flite-devel
 
 And then execute:
 
-    $ bundle
-
-Or install it yourself as:
-
     $ gem install flite
 
-Ruby-flite tries to link with **all voices and languages**.
+Ruby Flite tries to link with **all voices and languages**.
 If you want to reduce dependent libraries, execute the followings
-instead of above commands.
-
-    $ bundle config --local build.flite --with-voices=kal --with-langs=eng
-    $ bundle
-
-Or
+instead of above command.
 
     $ gem install flite -- --with-voices=kal --with-langs=eng
 
@@ -120,7 +105,7 @@ Flite.default_voice = 'rms'
 
 ## License
 
-* Ruby-flite itself is licensed under 2-clause BSD-style license.
+* Ruby Flite itself is licensed under 2-clause BSD-style license.
 * CMU Flite is licensed under BSD-like license.
   See http://www.festvox.org/flite/download.html
 
