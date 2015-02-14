@@ -24,8 +24,11 @@ sudo apt-get install flite1-dev
 yum install flite flite-devel
 
 # On Windows
-# you have no need to install CMU Flite if you use the flite binary gem.
-# CMU Flite is statically linked.
+# You have no need to install CMU Flite if you use rubies distributed by rubyinstaller.org.
+# Binary gems for the rubies include CMU Flite.
+
+# Others
+# You need to install it by yourself.
 ```
 
 And then execute:
