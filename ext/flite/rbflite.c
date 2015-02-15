@@ -38,6 +38,13 @@
 #include "rbflite.h"
 #include <flite/flite_version.h>
 
+#ifndef MIN
+#define MIN(a, b) ((a) < (b)) ? (a) : (b)
+#endif
+#ifndef MAX
+#define MAX(a, b) ((a) > (b)) ? (a) : (b)
+#endif
+
 #ifdef WORDS_BIGENDIAN
 #define TO_LE4(num)  SWAPINT(num)
 #defien TO_LE2(num)  SWAPSHORT(num)
@@ -80,34 +87,100 @@ typedef struct {
     thread_queue_t queue;
 } rbflite_voice_t;
 
+#define MIN_BUFFER_LIST_SIZE (64 * 1024)
+typedef struct buffer_list {
+    struct buffer_list *next;
+    size_t size;
+    size_t used;
+    char buf[1];
+} buffer_list_t;
+
 typedef struct {
     cst_voice *voice;
     const char *text;
     const char *outtype;
-    VALUE io;
-    int state;
+    buffer_list_t *buffer_list;
+    buffer_list_t *buffer_list_last;
 } voice_speech_arg_t;
-
-typedef struct {
-    VALUE io;
-    void *data;
-    long size;
-} io_write_arg_t;
 
 static VALUE rb_mFlite;
 static VALUE rb_cVoice;
-static ID id_write;
 
-/*
- * call graph:
- *
- *  rbflite_audio_write_cb()
- *    --> rbfile_io_write_protect() via rb_thread_call_with_gvl()
- *     --> rbfile_io_write() via rb_protect()
- */
 static int rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg);
-static void *rbfile_io_write_protect(void *data);
-static VALUE rbfile_io_write(VALUE data);
+static buffer_list_t *buffer_list_alloc(size_t size);
+
+static void lock_thread(thread_queue_t *queue, thread_queue_entry_t *entry)
+{
+    /* enqueue the current thread to voice->queue. */
+    entry->next = NULL;
+    *queue->tail = entry;
+    queue->tail = &entry->next;
+    if (queue->head != entry) {
+        /* stop the current thread if other threads run. */
+        entry->thread = rb_thread_current();
+        rb_thread_stop();
+    }
+}
+
+static void unlock_thread(thread_queue_t *queue)
+{
+    /* dequeue the current thread from voice->queue. */
+    queue->head = queue->head->next;
+    if (queue->head == NULL) {
+        queue->tail = &queue->head;
+    } else {
+        /* resume the top of blocked threads. */
+        rb_thread_wakeup_alive(queue->head->thread);
+    }
+}
+
+static int add_data(voice_speech_arg_t *arg, const void *data, size_t size)
+{
+    buffer_list_t *list;
+    size_t rest;
+
+    if (arg->buffer_list == NULL) {
+        list = buffer_list_alloc(size);
+        if (list == NULL) {
+            return -1;
+        }
+        arg->buffer_list = arg->buffer_list_last = list;
+    }
+    list = arg->buffer_list_last;
+    rest = list->size - list->used;
+    if (size <= rest) {
+        memcpy(list->buf + list->used, data, size);
+        list->used += size;
+    } else {
+        memcpy(list->buf + list->used, data, rest);
+        list->used += rest;
+        data = (const char*)data + rest;
+        size -= rest;
+        list = buffer_list_alloc(size);
+        if (list == NULL) {
+            return -1;
+        }
+        memcpy(list->buf, data, size);
+        list->used = size;
+        arg->buffer_list_last->next = list;
+        arg->buffer_list_last = list;
+    }
+    return 0;
+}
+
+static buffer_list_t *buffer_list_alloc(size_t size)
+{
+    size_t alloc_size = MAX(size + offsetof(buffer_list_t, buf), MIN_BUFFER_LIST_SIZE);
+    buffer_list_t *list = malloc(alloc_size);
+
+    if (list == NULL) {
+        return NULL;
+    }
+    list->next = NULL;
+    list->size = alloc_size - offsetof(buffer_list_t, buf);
+    list->used = 0;
+    return list;
+}
 
 static VALUE
 flite_s_list_builtin_voices(VALUE klass)
@@ -196,9 +269,6 @@ static int
 rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg)
 {
     voice_speech_arg_t *ud = (voice_speech_arg_t *)ASC_LAST_ARG_TO_USERDATA(last_arg);
-    io_write_arg_t arg;
-
-    arg.io = ud->io;
 
     if (start == 0) {
         /* write WAVE file header. */
@@ -240,47 +310,21 @@ rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_las
         header.bitswidth = TO_LE2(sizeof(short) * 8);
         header.data_size = TO_LE4(data_size);
 
-        arg.data = &header;
-        arg.size = sizeof(header);
-        ud->state = (int)(VALUE)rb_thread_call_with_gvl(rbfile_io_write_protect, &arg);
-        if (ud->state != 0) {
+        if (add_data(ud, &header, sizeof(header)) != 0) {
             return CST_AUDIO_STREAM_STOP;
         }
     }
 
-    arg.data = &w->samples[start];
-    arg.size = size * sizeof(short);
-    ud->state = (int)(VALUE)rb_thread_call_with_gvl(rbfile_io_write_protect, &arg);
-    if (ud->state != 0) {
+    if (add_data(ud, &w->samples[start], size * sizeof(short)) != 0) {
         return CST_AUDIO_STREAM_STOP;
     }
-
     return CST_AUDIO_STREAM_CONT;
 }
 
-static void *
-rbfile_io_write_protect(void *data)
-{
-    int state = 0;
-    rb_protect(rbfile_io_write, (VALUE)data, &state);
-    return (void*)(VALUE)state;
-}
-
 static VALUE
-rbfile_io_write(VALUE data)
-{
-    const io_write_arg_t *arg = (const io_write_arg_t *)data;
-    rb_funcall(arg->io, id_write, 1, rb_str_new(arg->data, arg->size));
-    return Qnil;
-}
-
-static VALUE
-rbflite_voice_speech(int argc, VALUE *argv, VALUE self)
+rbflite_voice_speak(VALUE self, VALUE text)
 {
     rbflite_voice_t *voice = DATA_PTR(self);
-    VALUE text;
-    VALUE out;
-    cst_audio_streaming_info *asi = NULL;
     voice_speech_arg_t arg;
     thread_queue_entry_t entry;
 
@@ -288,63 +332,76 @@ rbflite_voice_speech(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eRuntimeError, "not initialized");
     }
 
-    rb_scan_args(argc, argv, "11", &text, &out);
     arg.voice = voice->voice;
     arg.text = StringValueCStr(text);
-    arg.io = Qnil;
-    arg.state = 0;
+    arg.outtype = "play";
+    arg.buffer_list = NULL;
+    arg.buffer_list_last = NULL;
 
-    if (NIL_P(out)) {
-        /* play audio */
-        arg.outtype = "play";
-    } else if (rb_respond_to(out, id_write)) {
-        /* write to an object */
-        asi = new_audio_streaming_info();
-        if (asi == NULL) {
-            rb_raise(rb_eNoMemError, "failed to allocate audio_streaming_info");
-        }
-        asi->asc = rbflite_audio_write_cb;
-        asi->userdata = (void*)&arg;
-        arg.outtype = "stream";
-        arg.io = out;
-    } else {
-        /* write to a file */
-        out = rb_str_export_to_enc(out, rb_filesystem_encoding());
-        arg.outtype = StringValueCStr(out);
-    }
+    lock_thread(&voice->queue, &entry);
 
-    /* enqueue the current thread to voice->queue. */
-    entry.next = NULL;
-    *voice->queue.tail = &entry;
-    voice->queue.tail = &entry.next;
-    if (voice->queue.head != &entry) {
-        /* stop the current thread if other threads run. */
-        entry.thread = rb_thread_current();
-        rb_thread_stop();
-    }
-
-    if (asi != NULL) {
-        feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
-    }
     rb_thread_call_without_gvl(voice_speech_without_gvl, &arg, NULL, NULL);
     RB_GC_GUARD(text);
-    RB_GC_GUARD(out);
 
-    /* dequeue the current thread from voice->queue. */
-    voice->queue.head = voice->queue.head->next;
-    if (voice->queue.head != NULL) {
-        /* resume the top of blocked threads. */
-        rb_thread_wakeup(voice->queue.head->thread);
-    }
+    unlock_thread(&voice->queue);
 
-    if (asi != NULL) {
-        delete_audio_streaming_info(asi);
-        flite_feat_remove(voice->voice->features, "streaming_info");
-        if (arg.state != 0) {
-            rb_jump_tag(arg.state);
-        }
-    }
     return self;
+}
+
+static VALUE
+rbflite_voice_to_speech(VALUE self, VALUE text)
+{
+    rbflite_voice_t *voice = DATA_PTR(self);
+    cst_audio_streaming_info *asi = NULL;
+    voice_speech_arg_t arg;
+    thread_queue_entry_t entry;
+    buffer_list_t *list, *list_next;
+    size_t size;
+    VALUE speech_data;
+    char *ptr;
+
+    if (voice->voice == NULL) {
+        rb_raise(rb_eRuntimeError, "not initialized");
+    }
+
+    arg.voice = voice->voice;
+    arg.text = StringValueCStr(text);
+    arg.outtype = "stream";
+    arg.buffer_list = NULL;
+    arg.buffer_list_last = NULL;
+
+    /* write to an object */
+    asi = new_audio_streaming_info();
+    if (asi == NULL) {
+        rb_raise(rb_eNoMemError, "failed to allocate audio_streaming_info");
+    }
+    asi->asc = rbflite_audio_write_cb;
+    asi->userdata = (void*)&arg;
+
+    lock_thread(&voice->queue, &entry);
+
+    feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
+    rb_thread_call_without_gvl(voice_speech_without_gvl, &arg, NULL, NULL);
+    flite_feat_remove(voice->voice->features, "streaming_info");
+    RB_GC_GUARD(text);
+
+    unlock_thread(&voice->queue);
+
+    size = 0;
+    for (list = arg.buffer_list; list != NULL; list = list->next) {
+        size += list->used;
+    }
+    speech_data = rb_str_buf_new(size);
+    ptr = RSTRING_PTR(speech_data);
+    for (list = arg.buffer_list; list != NULL; list = list_next) {
+        memcpy(ptr, list->buf, list->used);
+        ptr += list->used;
+        list_next = list->next;
+        free(list);
+    }
+    rb_str_set_len(speech_data, size);
+
+    return speech_data;
 }
 
 static VALUE
@@ -379,8 +436,6 @@ Init_flite(void)
 {
     VALUE cmu_flite_version;
 
-    id_write = rb_intern("write");
-
     rb_mFlite = rb_define_module("Flite");
 
     cmu_flite_version = rb_usascii_str_new_cstr(FLITE_PROJECT_VERSION);
@@ -405,7 +460,8 @@ Init_flite(void)
     rb_define_alloc_func(rb_cVoice, rbflite_voice_s_allocate);
 
     rb_define_method(rb_cVoice, "initialize", rbflite_voice_initialize, -1);
-    rb_define_method(rb_cVoice, "speech", rbflite_voice_speech, -1);
+    rb_define_method(rb_cVoice, "speak", rbflite_voice_speak, 1);
+    rb_define_method(rb_cVoice, "to_speech", rbflite_voice_to_speech, 1);
     rb_define_method(rb_cVoice, "name", rbflite_voice_name, 0);
     rb_define_method(rb_cVoice, "pathname", rbflite_voice_pathname, 0);
 }

@@ -9,7 +9,7 @@ voices built using the [FestVox](http://festvox.org/) suite of voice building to
 
 ## Supported versions
 
-* ruby 2.0.0 and uppper
+* ruby 1.9.3 and uppper
 * CMU Flite 1.4 and 2.0.
 
 ## Installation
@@ -47,14 +47,13 @@ instead of above command.
 require 'flite'
 
 # output to the PC speaker.
+"Hello World!".speak
+
+# convert to a WAVE file
 "Hello World!".to_speech
 
 # save as a WAVE file
-"Hello World!".to_speech("hello_world.wav")
-
-# write to an I/O object if it responds to 'write'.
-File.open("hello_world.wav", "wb") do |f|
-  "Hello World!".to_speech(f)
+File.binwrite("hello_world.wav", "Hello World!".to_speech)
 end
 ```
 ## Advanced Usage
@@ -69,14 +68,13 @@ Flite.list_builtin_voices
 voice = Flite::Voice.new("slt")
 
 # output to the PC speaker.
-voice.speech("Hello World!")
+voice.speak("Hello World!")
+
+# convert to a WAVE file
+voice.to_speech("Hello World!")
 
 # save as a WAVE file
-voice.speech("Hello World!", "hello_world.wav")
-
-# write to an I/O object if it responds to 'write'.
-File.open("hello_world.wav", "wb") do |f|
-  voice.speech("Hello World!", f)
+File.binwrite("hello_world.wav", voice.to_speech("Hello World!"))
 end
 
 # Change the voice used for String#to_speech
@@ -90,21 +88,30 @@ Flite.default_voice = 'rms'
 
 ## Restrictions
 
-* `String#to_speech(io_object)` and `Flite::Voice#speech(text, io_object)`
-  are not thread-safe. You need to create `Flite::Voice` objects for
-  each threads and use `Flite::Voice#speech`.
-
-* `String#to_speech("play")` and `Flite::Voice#speech(text, "play")`
-  don't save wave data to the specified file `play`. They output speech
-  data to the PC speaker instead.
-
-* `String#to_speech("stream")`, `String#to_speech("none")`,
-  `Flite::Voice#speech(text, "stream")` and `Flite::Voice#speech(text, "none")`
-  don't save wave data to the specified file `stream` or `none`. They
-  synthesize speech and discard the result.
+* Ruby process doesn't terminate while talking to the speaker.
 
 * When an error occurs in CMU Flite, the error message is outputted to
   the standard error.
+
+## NEWS
+
+### 0.1.0
+
+Almost methods were changed.
+
+Added methods:
+
+* File::Voice#speak  - talks to the PC speaker
+* File::Voice#to_speech - converts to audio data
+* String#speak  - talks to the PC speaker
+
+Deleted method:
+
+* File::Voice#speech - use File::Voice#speak or File::Voice#to_speech instead
+
+Changed Method:
+
+* String#to_speech - converts to audio data. Use String#speak to talk to the PC speaker
 
 ## License
 

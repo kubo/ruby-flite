@@ -52,7 +52,11 @@ module Flite
 end
 
 class String
-  def to_speech(out = nil)
-    Flite.default_voice.speech(self, out)
+  def speak
+    Flite.default_voice.speak(self)
+  end
+
+  def to_speech(*args)
+    Flite.default_voice.to_speech(self, *args)
   end
 end
