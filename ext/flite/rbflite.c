@@ -65,8 +65,19 @@ cst_lexicon *cmu_indic_lex_init(void);
 void cmu_grapheme_lang_init(cst_voice *v);
 cst_lexicon *cmu_grapheme_lex_init(void);
 
+typedef struct thread_queue_entry {
+    struct thread_queue_entry *next;
+    VALUE thread;
+} thread_queue_entry_t;
+
+typedef struct {
+    thread_queue_entry_t *head;
+    thread_queue_entry_t **tail;
+} thread_queue_t;
+
 typedef struct {
     cst_voice *voice;
+    thread_queue_t queue;
 } rbflite_voice_t;
 
 typedef struct {
@@ -125,8 +136,10 @@ static VALUE
 rbflite_voice_s_allocate(VALUE klass)
 {
     rbflite_voice_t *voice;
+    VALUE obj = Data_Make_Struct(klass, rbflite_voice_t, NULL, rbfile_voice_free, voice);
 
-    return Data_Make_Struct(klass, rbflite_voice_t, NULL, rbfile_voice_free, voice);
+    voice->queue.tail = &voice->queue.head;
+    return obj;
 }
 
 #ifdef HAVE_FLITE_VOICE_LOAD
@@ -269,6 +282,7 @@ rbflite_voice_speech(int argc, VALUE *argv, VALUE self)
     VALUE out;
     cst_audio_streaming_info *asi = NULL;
     voice_speech_arg_t arg;
+    thread_queue_entry_t entry;
 
     if (voice->voice == NULL) {
         rb_raise(rb_eRuntimeError, "not initialized");
@@ -291,7 +305,6 @@ rbflite_voice_speech(int argc, VALUE *argv, VALUE self)
         }
         asi->asc = rbflite_audio_write_cb;
         asi->userdata = (void*)&arg;
-        feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
         arg.outtype = "stream";
         arg.io = out;
     } else {
@@ -300,11 +313,32 @@ rbflite_voice_speech(int argc, VALUE *argv, VALUE self)
         arg.outtype = StringValueCStr(out);
     }
 
+    /* enqueue the current thread to voice->queue. */
+    entry.next = NULL;
+    *voice->queue.tail = &entry;
+    voice->queue.tail = &entry.next;
+    if (voice->queue.head != &entry) {
+        /* stop the current thread if other threads run. */
+        entry.thread = rb_thread_current();
+        rb_thread_stop();
+    }
+
+    if (asi != NULL) {
+        feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
+    }
     rb_thread_call_without_gvl(voice_speech_without_gvl, &arg, NULL, NULL);
     RB_GC_GUARD(text);
     RB_GC_GUARD(out);
 
+    /* dequeue the current thread from voice->queue. */
+    voice->queue.head = voice->queue.head->next;
+    if (voice->queue.head != NULL) {
+        /* resume the top of blocked threads. */
+        rb_thread_wakeup(voice->queue.head->thread);
+    }
+
     if (asi != NULL) {
+        delete_audio_streaming_info(asi);
         flite_feat_remove(voice->voice->features, "streaming_info");
         if (arg.state != 0) {
             rb_jump_tag(arg.state);
