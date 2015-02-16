@@ -85,6 +85,10 @@ EOS
 EOS
 end
 
+if have_library('mp3lame')
+  have_header('lame.h') || have_header('lame/lame.h')
+end
+
 RUBY_VERSION =~ /(\d+).(\d+)/
 $defs << "-DInit_flite=Init_flite_#{$1}#{$2}0"
 create_makefile("flite_#{$1}#{$2}0")

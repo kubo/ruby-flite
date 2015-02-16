@@ -53,6 +53,16 @@
 #define TO_LE2(num)  (num)
 #endif
 
+#ifdef HAVE_LAME_LAME_H
+#include <lame/lame.h>
+#define HAVE_MP3LAME 1
+#endif
+
+#ifdef HAVE_LAME_H
+#include <lame.h>
+#define HAVE_MP3LAME 1
+#endif
+
 #ifdef HAVE_CST_AUDIO_STREAMING_INFO_UTT
 /* flite 2.0.0 */
 typedef struct cst_audio_streaming_info_struct *asc_last_arg_t;
@@ -62,6 +72,14 @@ typedef struct cst_audio_streaming_info_struct *asc_last_arg_t;
 typedef void *asc_last_arg_t;
 #define ASC_LAST_ARG_TO_USERDATA(last_arg) (last_arg)
 #endif
+
+enum rbfile_error {
+    RBFLITE_ERROR_SUCCESS,
+    RBFLITE_ERROR_OUT_OF_MEMORY,
+    RBFLITE_ERROR_LAME_INIT_PARAMS,
+    RBFLITE_ERROR_LAME_ENCODE_BUFFER,
+    RBFLITE_ERROR_LAME_ENCODE_FLUSH,
+};
 
 void usenglish_init(cst_voice *v);
 cst_lexicon *cmulex_init(void);
@@ -99,15 +117,25 @@ typedef struct {
     cst_voice *voice;
     const char *text;
     const char *outtype;
+    void *encoder;
     buffer_list_t *buffer_list;
     buffer_list_t *buffer_list_last;
-} voice_speech_arg_t;
+    enum rbfile_error error;
+} voice_speech_data_t;
+
+typedef struct {
+    cst_audio_stream_callback asc;
+    void *(*encoder_init)(VALUE opts);
+    void (*encoder_fini)(void *encoder);
+} audio_stream_encoder_t;
 
 static VALUE rb_mFlite;
 static VALUE rb_cVoice;
+static VALUE sym_mp3;
+static VALUE sym_wav;
 
-static int rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg);
 static buffer_list_t *buffer_list_alloc(size_t size);
+static void check_error(voice_speech_data_t *vsd);
 
 static void lock_thread(thread_queue_t *queue, thread_queue_entry_t *entry)
 {
@@ -134,19 +162,20 @@ static void unlock_thread(thread_queue_t *queue)
     }
 }
 
-static int add_data(voice_speech_arg_t *arg, const void *data, size_t size)
+static int add_data(voice_speech_data_t *vsd, const void *data, size_t size)
 {
     buffer_list_t *list;
     size_t rest;
 
-    if (arg->buffer_list == NULL) {
+    if (vsd->buffer_list == NULL) {
         list = buffer_list_alloc(size);
         if (list == NULL) {
+            vsd->error = RBFLITE_ERROR_OUT_OF_MEMORY;
             return -1;
         }
-        arg->buffer_list = arg->buffer_list_last = list;
+        vsd->buffer_list = vsd->buffer_list_last = list;
     }
-    list = arg->buffer_list_last;
+    list = vsd->buffer_list_last;
     rest = list->size - list->used;
     if (size <= rest) {
         memcpy(list->buf + list->used, data, size);
@@ -158,12 +187,13 @@ static int add_data(voice_speech_arg_t *arg, const void *data, size_t size)
         size -= rest;
         list = buffer_list_alloc(size);
         if (list == NULL) {
+            vsd->error = RBFLITE_ERROR_OUT_OF_MEMORY;
             return -1;
         }
         memcpy(list->buf, data, size);
         list->used = size;
-        arg->buffer_list_last->next = list;
-        arg->buffer_list_last = list;
+        vsd->buffer_list_last->next = list;
+        vsd->buffer_list_last = list;
     }
     return 0;
 }
@@ -171,7 +201,7 @@ static int add_data(voice_speech_arg_t *arg, const void *data, size_t size)
 static buffer_list_t *buffer_list_alloc(size_t size)
 {
     size_t alloc_size = MAX(size + offsetof(buffer_list_t, buf), MIN_BUFFER_LIST_SIZE);
-    buffer_list_t *list = malloc(alloc_size);
+    buffer_list_t *list = xmalloc(alloc_size);
 
     if (list == NULL) {
         return NULL;
@@ -180,6 +210,32 @@ static buffer_list_t *buffer_list_alloc(size_t size)
     list->size = alloc_size - offsetof(buffer_list_t, buf);
     list->used = 0;
     return list;
+}
+
+static void check_error(voice_speech_data_t *vsd)
+{
+    buffer_list_t *list, *list_next;
+
+    if (vsd->error == RBFLITE_ERROR_SUCCESS) {
+        return;
+    }
+    for (list = vsd->buffer_list; list != NULL; list = list_next) {
+        list_next = list->next;
+        xfree(list);
+    }
+    vsd->buffer_list = NULL;
+    switch (vsd->error) {
+    case RBFLITE_ERROR_OUT_OF_MEMORY:
+        rb_raise(rb_eNoMemError, "out of memory while writing speech data");
+    case RBFLITE_ERROR_LAME_INIT_PARAMS:
+        rb_raise(rb_eRuntimeError, "lame_init_params() error");
+    case RBFLITE_ERROR_LAME_ENCODE_BUFFER:
+        rb_raise(rb_eRuntimeError, "lame_encode_buffer() error");
+    case RBFLITE_ERROR_LAME_ENCODE_FLUSH:
+        rb_raise(rb_eRuntimeError, "lame_encode_flush() error");
+    default:
+        rb_raise(rb_eRuntimeError, "Unkown error %d", vsd->error);
+    }
 }
 
 static VALUE
@@ -193,6 +249,18 @@ flite_s_list_builtin_voices(VALUE klass)
         builtin++;
     }
 
+    return ary;
+}
+
+static VALUE
+flite_s_supported_audio_types(VALUE klass)
+{
+    VALUE ary = rb_ary_new();
+
+    rb_ary_push(ary, ID2SYM(rb_intern("wav")));
+#ifdef HAVE_MP3LAME
+    rb_ary_push(ary, ID2SYM(rb_intern("mp3")));
+#endif
     return ary;
 }
 
@@ -260,15 +328,15 @@ rbflite_voice_initialize(int argc, VALUE *argv, VALUE self)
 static void *
 voice_speech_without_gvl(void *data)
 {
-    voice_speech_arg_t *arg = (voice_speech_arg_t *)data;
-    flite_text_to_speech(arg->text, arg->voice, arg->outtype);
+    voice_speech_data_t *vsd = (voice_speech_data_t *)data;
+    flite_text_to_speech(vsd->text, vsd->voice, vsd->outtype);
     return NULL;
 }
 
 static int
-rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg)
+wav_encoder_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg)
 {
-    voice_speech_arg_t *ud = (voice_speech_arg_t *)ASC_LAST_ARG_TO_USERDATA(last_arg);
+    voice_speech_data_t *vsd = (voice_speech_data_t *)ASC_LAST_ARG_TO_USERDATA(last_arg);
 
     if (start == 0) {
         /* write WAVE file header. */
@@ -310,50 +378,173 @@ rbflite_audio_write_cb(const cst_wave *w, int start, int size, int last, asc_las
         header.bitswidth = TO_LE2(sizeof(short) * 8);
         header.data_size = TO_LE4(data_size);
 
-        if (add_data(ud, &header, sizeof(header)) != 0) {
+        if (add_data(vsd, &header, sizeof(header)) != 0) {
             return CST_AUDIO_STREAM_STOP;
         }
     }
 
-    if (add_data(ud, &w->samples[start], size * sizeof(short)) != 0) {
+    if (add_data(vsd, &w->samples[start], size * sizeof(short)) != 0) {
         return CST_AUDIO_STREAM_STOP;
     }
     return CST_AUDIO_STREAM_CONT;
 }
 
+static audio_stream_encoder_t wav_encoder = {
+    wav_encoder_cb,
+    NULL,
+    NULL,
+};
+
+#ifdef HAVE_MP3LAME
+
+#define MAX_SAMPLE_SIZE 1024
+/* "mp3buf_size in bytes = 1.25*num_samples + 7200" according to lame.h. */
+#define MP3BUF_SIZE  (MAX_SAMPLE_SIZE + MAX_SAMPLE_SIZE / 4 + 7200)
+static int mp3_encoder_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg)
+{
+    voice_speech_data_t *vsd = (voice_speech_data_t *)ASC_LAST_ARG_TO_USERDATA(last_arg);
+    lame_global_flags *gf = vsd->encoder;
+    unsigned char mp3buf[MP3BUF_SIZE];
+    short *sptr = &w->samples[start];
+    short *eptr = sptr + size;
+    int rv;
+
+    if (start == 0) {
+        lame_set_num_samples(gf, cst_wave_num_samples(w));
+        lame_set_in_samplerate(gf, cst_wave_sample_rate(w));
+        lame_set_num_channels(gf, 1);
+        lame_set_mode(gf, MONO);
+        rv = lame_init_params(gf);
+        if (rv == -1) {
+            vsd->error = RBFLITE_ERROR_LAME_INIT_PARAMS;
+            return CST_AUDIO_STREAM_STOP;
+        }
+    }
+    while (eptr - sptr > MAX_SAMPLE_SIZE) {
+        rv = lame_encode_buffer(gf, sptr, NULL, MAX_SAMPLE_SIZE, mp3buf, sizeof(mp3buf));
+        if (rv < 0) {
+            vsd->error = RBFLITE_ERROR_LAME_ENCODE_BUFFER;
+            return CST_AUDIO_STREAM_STOP;
+        }
+        if (rv > 0) {
+            if (add_data(vsd, mp3buf, rv) != 0) {
+                return CST_AUDIO_STREAM_STOP;
+            }
+        }
+        sptr += MAX_SAMPLE_SIZE;
+    }
+    rv = lame_encode_buffer(gf, sptr, NULL, eptr - sptr, mp3buf, sizeof(mp3buf));
+    if (rv < 0) {
+        vsd->error = RBFLITE_ERROR_LAME_ENCODE_BUFFER;
+        return CST_AUDIO_STREAM_STOP;
+    }
+    if (rv > 0) {
+        if (add_data(vsd, mp3buf, rv) != 0) {
+            return CST_AUDIO_STREAM_STOP;
+        }
+    }
+    if (last) {
+        rv = lame_encode_flush(gf, mp3buf, sizeof(mp3buf));
+        if (rv < 0) {
+            vsd->error = RBFLITE_ERROR_LAME_ENCODE_FLUSH;
+            return CST_AUDIO_STREAM_STOP;
+        }
+        if (rv > 0) {
+            if (add_data(vsd, mp3buf, rv) != 0) {
+                return CST_AUDIO_STREAM_STOP;
+            }
+        }
+    }
+    return CST_AUDIO_STREAM_CONT;
+}
+
+static void *mp3_encoder_init(VALUE opts)
+{
+    lame_global_flags *gf = lame_init();
+
+    if (gf == NULL) {
+        rb_raise(rb_eRuntimeError, "Failed to initialize lame");
+    }
+
+    lame_set_bWriteVbrTag(gf, 0);
+    lame_set_brate(gf, 64);
+
+    if (!NIL_P(opts)) {
+        VALUE v;
+        Check_Type(opts, T_HASH);
+
+        v = rb_hash_aref(opts, ID2SYM(rb_intern("bitrate")));
+        if (!NIL_P(v)) {
+            lame_set_brate(gf, NUM2INT(v));
+        }
+
+        v = rb_hash_aref(opts, ID2SYM(rb_intern("scale")));
+        if (!NIL_P(v)) {
+            lame_set_scale(gf, NUM2INT(v));
+        }
+
+        v = rb_hash_aref(opts, ID2SYM(rb_intern("quality")));
+        if (!NIL_P(v)) {
+            lame_set_quality(gf, NUM2INT(v));
+        }
+    }
+
+    lame_set_bWriteVbrTag(gf, 0);
+    return gf;
+}
+
+static void mp3_encoder_fini(void *encoder)
+{
+    lame_close(encoder);
+}
+
+static audio_stream_encoder_t mp3_encoder = {
+    mp3_encoder_cb,
+    mp3_encoder_init,
+    mp3_encoder_fini,
+};
+
+#endif
+
 static VALUE
 rbflite_voice_speak(VALUE self, VALUE text)
 {
     rbflite_voice_t *voice = DATA_PTR(self);
-    voice_speech_arg_t arg;
+    voice_speech_data_t vsd;
     thread_queue_entry_t entry;
 
     if (voice->voice == NULL) {
         rb_raise(rb_eRuntimeError, "not initialized");
     }
 
-    arg.voice = voice->voice;
-    arg.text = StringValueCStr(text);
-    arg.outtype = "play";
-    arg.buffer_list = NULL;
-    arg.buffer_list_last = NULL;
+    vsd.voice = voice->voice;
+    vsd.text = StringValueCStr(text);
+    vsd.outtype = "play";
+    vsd.buffer_list = NULL;
+    vsd.buffer_list_last = NULL;
+    vsd.error = RBFLITE_ERROR_SUCCESS;
 
     lock_thread(&voice->queue, &entry);
 
-    rb_thread_call_without_gvl(voice_speech_without_gvl, &arg, NULL, NULL);
+    rb_thread_call_without_gvl(voice_speech_without_gvl, &vsd, NULL, NULL);
     RB_GC_GUARD(text);
 
     unlock_thread(&voice->queue);
 
+    check_error(&vsd);
     return self;
 }
 
 static VALUE
-rbflite_voice_to_speech(VALUE self, VALUE text)
+rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
 {
     rbflite_voice_t *voice = DATA_PTR(self);
+    VALUE text;
+    VALUE audio_type;
+    VALUE opts;
     cst_audio_streaming_info *asi = NULL;
-    voice_speech_arg_t arg;
+    audio_stream_encoder_t *encoder;
+    voice_speech_data_t vsd;
     thread_queue_entry_t entry;
     buffer_list_t *list, *list_next;
     size_t size;
@@ -364,40 +555,71 @@ rbflite_voice_to_speech(VALUE self, VALUE text)
         rb_raise(rb_eRuntimeError, "not initialized");
     }
 
-    arg.voice = voice->voice;
-    arg.text = StringValueCStr(text);
-    arg.outtype = "stream";
-    arg.buffer_list = NULL;
-    arg.buffer_list_last = NULL;
+    rb_scan_args(argc, argv, "12", &text, &audio_type, &opts);
+
+    if (NIL_P(audio_type)) {
+        encoder = &wav_encoder;
+    } else {
+        if (rb_equal(audio_type, sym_wav)) {
+            encoder = &wav_encoder;
+#ifdef HAVE_MP3LAME
+        } else if (rb_equal(audio_type, sym_mp3)) {
+            encoder = &mp3_encoder;
+#endif
+        } else {
+            rb_raise(rb_eArgError, "unknown audio type");
+        }
+    }
+
+    vsd.voice = voice->voice;
+    vsd.text = StringValueCStr(text);
+    vsd.outtype = "stream";
+    vsd.encoder = NULL;
+    vsd.buffer_list = NULL;
+    vsd.buffer_list_last = NULL;
+    vsd.error = RBFLITE_ERROR_SUCCESS;
+
+    if (encoder->encoder_init) {
+        vsd.encoder = encoder->encoder_init(opts);
+    }
 
     /* write to an object */
     asi = new_audio_streaming_info();
     if (asi == NULL) {
+        if (encoder->encoder_fini) {
+            encoder->encoder_fini(vsd.encoder);
+        }
         rb_raise(rb_eNoMemError, "failed to allocate audio_streaming_info");
     }
-    asi->asc = rbflite_audio_write_cb;
-    asi->userdata = (void*)&arg;
+    asi->asc = encoder->asc;
+    asi->userdata = (void*)&vsd;
 
     lock_thread(&voice->queue, &entry);
 
     feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
-    rb_thread_call_without_gvl(voice_speech_without_gvl, &arg, NULL, NULL);
+    rb_thread_call_without_gvl(voice_speech_without_gvl, &vsd, NULL, NULL);
     flite_feat_remove(voice->voice->features, "streaming_info");
     RB_GC_GUARD(text);
 
     unlock_thread(&voice->queue);
 
+    if (encoder->encoder_fini) {
+        encoder->encoder_fini(vsd.encoder);
+    }
+
+    check_error(&vsd);
+
     size = 0;
-    for (list = arg.buffer_list; list != NULL; list = list->next) {
+    for (list = vsd.buffer_list; list != NULL; list = list->next) {
         size += list->used;
     }
     speech_data = rb_str_buf_new(size);
     ptr = RSTRING_PTR(speech_data);
-    for (list = arg.buffer_list; list != NULL; list = list_next) {
+    for (list = vsd.buffer_list; list != NULL; list = list_next) {
         memcpy(ptr, list->buf, list->used);
         ptr += list->used;
         list_next = list->next;
-        free(list);
+        xfree(list);
     }
     rb_str_set_len(speech_data, size);
 
@@ -436,6 +658,9 @@ Init_flite(void)
 {
     VALUE cmu_flite_version;
 
+    sym_mp3 = ID2SYM(rb_intern("mp3"));
+    sym_wav = ID2SYM(rb_intern("wav"));
+
     rb_mFlite = rb_define_module("Flite");
 
     cmu_flite_version = rb_usascii_str_new_cstr(FLITE_PROJECT_VERSION);
@@ -456,12 +681,13 @@ Init_flite(void)
 #endif
 
     rb_define_singleton_method(rb_mFlite, "list_builtin_voices", flite_s_list_builtin_voices, 0);
+    rb_define_singleton_method(rb_mFlite, "supported_audio_types", flite_s_supported_audio_types, 0);
     rb_cVoice = rb_define_class_under(rb_mFlite, "Voice", rb_cObject);
     rb_define_alloc_func(rb_cVoice, rbflite_voice_s_allocate);
 
     rb_define_method(rb_cVoice, "initialize", rbflite_voice_initialize, -1);
     rb_define_method(rb_cVoice, "speak", rbflite_voice_speak, 1);
-    rb_define_method(rb_cVoice, "to_speech", rbflite_voice_to_speech, 1);
+    rb_define_method(rb_cVoice, "to_speech", rbflite_voice_to_speech, -1);
     rb_define_method(rb_cVoice, "name", rbflite_voice_name, 0);
     rb_define_method(rb_cVoice, "pathname", rbflite_voice_pathname, 0);
 }
