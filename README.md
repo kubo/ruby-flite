@@ -41,50 +41,80 @@ instead of above command.
 
     $ gem install flite -- --with-voices=kal --with-langs=eng
 
-## Simple Usage
+## Examples
 
 ```ruby
 require 'flite'
 
-# output to the PC speaker.
+# Speak "Hello World!"
 "Hello World!".speak
 
 # convert to a WAVE file
 "Hello World!".to_speech
 
-# save as a WAVE file
+# Create a speech data and save as "hello_world.wav"
 File.binwrite("hello_world.wav", "Hello World!".to_speech)
-end
-```
-## Advanced Usage
 
-```ruby
-require 'flite'
-
-# array of builtin voice names.
-Flite.list_builtin_voices
-
-# create a voice. 'slt' is a voice name.
-voice = Flite::Voice.new("slt")
-
-# output to the PC speaker.
-voice.speak("Hello World!")
-
-# convert to a WAVE file
-voice.to_speech("Hello World!")
-
-# save as a WAVE file
-File.binwrite("hello_world.wav", voice.to_speech("Hello World!"))
-end
-
-# Change the voice used for String#to_speech
+# Change the voice used for String#speak and String#to_speech
 Flite.default_voice = 'rms'
+
+# Speak again
+"Hello World!".speak
 ```
+
+See:
+
+* http://www.rubydoc.info/gems/flite/Flite/Voice
+* http://www.rubydoc.info/gems/flite/String
 
 ## Sample Applications
 
-* [saytime.rb](https://github.com/kubo/ruby-flite/blob/master/bin/saytime.rb) - talking clock
-* [speech_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speech_web_server.rb) - Web server replying synthesized speech
+### [saytime.rb](https://github.com/kubo/ruby-flite/blob/master/bin/saytime.rb) - talking clock
+
+This is inspired by [saytime](http://acme.com/software/saytime/).
+
+Example:
+
+> Talk the current time once:
+>
+> ```shell
+> ruby saytime.rb
+> ```
+>
+> Talk the current time forever:
+>
+> ```shell
+> ruby saytime.rb --loop
+> ```
+>
+> Talk the current time 5 times
+>
+> ```shell
+> ruby saytime.rb --loop 5
+> ```
+>
+> Talk the current time after sleeping 5 seconds
+>
+> ```shell
+> ruby saytime.rb --interval 5
+> ```
+
+### [speech_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speech_web_server.rb) - Web server replying synthesized speech
+
+Usage:
+
+> Start a web server:
+> 
+> ```shell
+> ruby speech_web_server.rb
+> ```
+>
+> Open a browser and access:
+>
+>     http://HOSTNAME_OR_IP_ADDRESS:9080
+>     (Change HOSTNAME_OR_IP_ADDRESS.)
+>
+> Click 'Play' buttons.
 
 ## Restrictions
 
@@ -97,21 +127,8 @@ Flite.default_voice = 'rms'
 
 ### 0.1.0
 
-Almost methods were changed.
-
-Added methods:
-
-* File::Voice#speak  - talks to the PC speaker
-* File::Voice#to_speech - converts to audio data
-* String#speak  - talks to the PC speaker
-
-Deleted method:
-
-* File::Voice#speech - use File::Voice#speak or File::Voice#to_speech instead
-
-Changed Method:
-
-* String#to_speech - converts to audio data. Use String#speak to talk to the PC speaker
+Almost methods were changed. Especially {String#to_speech} returns WAV
+audio data instead of speaking. Use {String#speak} to speak a text.
 
 ## License
 
@@ -123,7 +140,6 @@ Changed Method:
 
 * [flite4r](http://www.rubydoc.info/gems/flite4r/) - Flite for Ruby (GPL)
 * [FestivalTTS4r](https://github.com/spejman/festivaltts4r) - Festival Text-To-Speech for Ruby
-* [saytime](http://acme.com/software/saytime/) - talking clock for SPARCstations
  
 ## Contributing
 

@@ -238,6 +238,14 @@ static void check_error(voice_speech_data_t *vsd)
     }
 }
 
+/*
+ *  Returns builtin voice names.
+ *
+ *  @example
+ *    Flite.list_builtin_voices # => ["kal", "awb_time", "kal16", "awb", "rms", "slt"]
+ *
+ *  @return [Array]
+ */
 static VALUE
 flite_s_list_builtin_voices(VALUE klass)
 {
@@ -252,6 +260,18 @@ flite_s_list_builtin_voices(VALUE klass)
     return ary;
 }
 
+/*
+ *  Returns supported audio types used as the second argument of {Flite::Voice#to_speech}.
+ *
+ *  @example
+ *    # Compiled with mp3 support
+ *    Flite.supported_audio_types # => [:wav, :mp3]
+ *
+ *    # Compiled without mp3 support
+ *    Flite.supported_audio_types # => [:wav]
+ *
+ *  @return [Array]
+ */
 static VALUE
 flite_s_supported_audio_types(VALUE klass)
 {
@@ -291,6 +311,28 @@ rbflite_voice_load(void *data)
 }
 #endif
 
+/*
+ * @overload initialize(name = nil)
+ *
+ *  Create a new voice specified by <code>name</code>.
+ *  If <code>name</code> includes '.' or '/' and ruby flite
+ *  is compiled for CMU Flite 2.0.0 or upper, try to
+ *  use a loadable voice.
+ *
+ *  @example
+ *
+ *    # Use default voice. It is 'kal' usually.
+ *    voice = Flite::Voice.new
+ *
+ *    # Use a builtin voice.
+ *    voice = Flite::Voice.new('awb')
+ *
+ *    # Use a lodable voice.
+ *    voice = Flite::Voice.new('/path/to/cmu_us_gka.flitevox')
+ *
+ *  @param [String] name
+ *  @see Flite.list_builtin_voices
+ */
 static VALUE
 rbflite_voice_initialize(int argc, VALUE *argv, VALUE self)
 {
@@ -506,6 +548,19 @@ static audio_stream_encoder_t mp3_encoder = {
 
 #endif
 
+/*
+ * @overload speak(text)
+ *
+ *  Speak the <code>text</code>.
+ *
+ *  @example
+ *    voice = Flite::Voice.new
+ *
+ *    # Speak 'Hello Flite World!'
+ *    voice.speak('Hello Flite World!')
+ *
+ *  @param [String] text
+ */
 static VALUE
 rbflite_voice_speak(VALUE self, VALUE text)
 {
@@ -535,6 +590,32 @@ rbflite_voice_speak(VALUE self, VALUE text)
     return self;
 }
 
+/*
+ * @overload to_speech(text, audio_type = :wave, opts = {})
+ *
+ *  Converts <code>text</code> to audio data.
+ *
+ *  @example
+ *    voice = Flite::Voice.new
+ *
+ *    # Save speech as wav
+ *    File.binwrite('hello_flite_world.wav',
+ *                  voice.to_speech('Hello Flite World!'))
+ *
+ *    # Save speech as mp3
+ *    File.binwrite('hello_flite_world.mp3',
+ *                  voice.to_speech('Hello Flite World!', :mp3))
+ *
+ *    # Save speech as mp3 whose bitrate is 128k.
+ *    File.binwrite('hello_flite_world.mp3',
+ *                  voice.to_speech('Hello Flite World!', :mp3, :bitrate => 128))
+ *
+ *  @param [String] text
+ *  @param [Symbol] audo_type :wave or :mp3 (when mp3 support is enabled)
+ *  @param [Hash]   opts  audio encoder options
+ *  @return [String] audio data
+ *  @see Flite.supported_audio_types
+ */
 static VALUE
 rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
 {
@@ -626,6 +707,21 @@ rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
     return speech_data;
 }
 
+/*
+ * @overload name
+ *
+ *  Returns voice name.
+ *
+ *  @example
+ *    voice = Flite::Voice.new('slt')
+ *    voice.name => 'slt'
+ *
+ *    # voice loading is a new feature of CMU Flite 2.0.0.
+ *    voice = Flite::Voice.new('/path/to/cmu_us_fem.flitevox')
+ *    voice.name => 'cmu_us_fem'
+ *
+ *  @return [String]
+ */
 static VALUE
 rbflite_voice_name(VALUE self)
 {
@@ -637,6 +733,22 @@ rbflite_voice_name(VALUE self)
     return rb_usascii_str_new_cstr(voice->voice->name);
 }
 
+/*
+ * @overload pathname
+ *
+ *  Returns the path of the voice if the voice is a loadable voice.
+ *  Otherwise, nil.
+ *
+ *  @example
+ *    voice = Flite::Voice.new
+ *    voice.pathname => 'kal'
+ *
+ *    # voice loading is a new feature of CMU Flite 2.0.0.
+ *    voice = Flite::Voice.new('/path/to/cmu_us_aup.flitevox')
+ *    voice.pathname => '/path/to/cmu_us_aup.flitevox'
+ *
+ *  @return [String]
+ */
 static VALUE
 rbflite_voice_pathname(VALUE self)
 {

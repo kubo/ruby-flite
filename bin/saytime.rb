@@ -3,19 +3,19 @@
 # saytime.rb - talking clock
 #
 # Usage:
-#  # talking clock once
+#  # Talk the current time once
 #  ruby saytime.rb
 #
-#  # talking clock forever
+#  # Talk the current time forever
 #  ruby saytime.rb --loop
 #
-#  # talking clock 5 times
+#  # Talk the current time 5 times
 #  ruby saytime.rb --loop 5
 #
-#  # talking clock after sleeping 5 seconds
+#  # Talk the current time after sleeping 5 seconds
 #  ruby saytime.rb --interval 5
 #
-#  # talking clock with 'slt' and 'awb' voices
+#  # Talk the current time with 'slt' and 'awb' voices
 #  ruby saytime.rb --voices=slt,awb
 #
 require 'flite'

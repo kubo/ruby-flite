@@ -36,12 +36,22 @@ RUBY_VERSION =~ /(\d+).(\d+)/
 require "flite_#{$1}#{$2}0"
 
 module Flite
+  # @private
   @@default_voice = Flite::Voice.new
 
+  # Returns the voice used by {String#speak} and {String#to_speech}.
+  #
+  # @return [Flite::Voice]
   def self.default_voice
     @@default_voice
   end
 
+  # Set the voice used by {String#speak} and {String#to_speech}.
+  # When <code>name</code> is a {Flite::Voice}, use it.
+  # Otherwise, use a new voice created by <code>Flite::Voice.new(name)</code>.
+  #
+  # @param [Flite::Voice or String] name voice or voice name
+  # @see Flite::Voice#initialize
   def self.default_voice=(name)
     if name.is_a? Flite::Voice
       @@default_voice = name
@@ -52,10 +62,35 @@ module Flite
 end
 
 class String
+  # Speaks <code>self</code>
+  #
+  # @example
+  #   "Hello Flite World!".speak
   def speak
     Flite.default_voice.speak(self)
   end
 
+  # @overload to_speech(audio_type = :wave, opts = {})
+  #
+  #  Converts <code>self</code> to audio data.
+  #
+  #  @example
+  #    # Save speech as wav
+  #    File.binwrite('hello_flite_world.wav',
+  #                  'Hello Flite World!'.to_speech())
+  #
+  #    # Save speech as mp3
+  #    File.binwrite('hello_flite_world.mp3',
+  #                  'Hello Flite World!'to_speech(:mp3))
+  #
+  #    # Save speech as mp3 whose bitrate is 128k.
+  #    File.binwrite('hello_flite_world.mp3',
+  #                  'Hello Flite World!'.to_speech(:mp3, :bitrate => 128))
+  #
+  #  @param [Symbol] audo_type :wave or :mp3 (when mp3 support is enabled)
+  #  @param [Hash]   opts  audio encoder options
+  #  @return [String] audio data
+  #  @see Flite.supported_audio_types
   def to_speech(*args)
     Flite.default_voice.to_speech(self, *args)
   end
