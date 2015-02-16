@@ -10,29 +10,30 @@
 #
 # 2. Access to the web server.
 #
-#    Open browser and access: http://HOSTNAME:9080
+#    Open browser and access: http://HOSTNAME_OR_IP_ADDRESS:9080
 #
 # 3. Click 'Play' buttons.
 #
 require 'webrick'
 require 'flite'
-require 'stringio'
 
-html_content = DATA.read
+html_content = DATA.read.sub(/FLITE_SUPPORT_MP3/, (Flite.supported_audio_types.include? :mp3).to_s)
 
 srv = WEBrick::HTTPServer.new({:Port => 9080})
 
 srv.mount_proc('/') do |req, res|
   h = req.query
   if h['text']
-    res['Content-type'] = 'audio/wav'
-    res['Content-Disposition'] = 'attachment; filename="audio.wav"'
+    audio_type = if h['type'] == 'mp3'
+                   :mp3
+                 else
+                   :wav
+                 end
+    res['Content-type'] = "audio/#{audio_type}"
+    res['Content-Disposition'] = %Q{attachment; filename="audio.#{audio_type}"}
 
     voice = Flite::Voice.new(h['voice'] || 'kal')
-    io = StringIO.new
-    voice.speech(h['text'], io)
-    io.rewind
-    res.body = io.read
+    res.body = voice.to_speech(h['text'], audio_type)
   else
     res['Content-type'] = 'text/html'
     res.body = html_content
@@ -48,23 +49,40 @@ __END__
 <title>Flite CGI</title>
 
 <script>
+audio_type = 'wav';
+
 function check_audio_type() {
   var audio = new Audio;
   if (audio.canPlayType('audio/wav') == '') {
-    var text = document.getElementById('text');
-    text.disabled = true;
-    enable_buttons(false);
-    alert('Cannot play audio/wav in this browser.\nUse Chrome, Firefox, Safari or Opera.');
+    if (FLITE_SUPPORT_MP3 && audio.canPlayType('audio/mp3') != '') {
+      audio_type = 'mp3';
+    } else {
+      var text = document.getElementById('text');
+      text.disabled = true;
+      enable_buttons(false);
+      alert('Cannot play audio/wav in this browser.\nUse Chrome, Firefox, Safari or Opera.');
+    }
   }
 }
 
-function speech(voice) {
+function speak(voice) {
   var text = document.getElementById('text');
   if (text != '') {
+    var status = document.getElementById('status');
+    status.innerHTML = 'Playing'
     enable_buttons(false);
-    var url = '/?text=' + encodeURIComponent(text.value) + '&voice=' + encodeURIComponent(voice);
+    var url = '/?voice=' + voice + '&type=' + audio_type + '&text=' + encodeURIComponent(text.value);
     var audio = new Audio(url);
     audio.onended = function() {
+      status.innerHTML = 'Finished'
+      enable_buttons(true);
+    };
+    audio.onabort = function() {
+      status.innerHTML = 'Abort'
+      enable_buttons(true);
+    };
+    audio.onerror = function() {
+      status.innerHTML = 'Error'
       enable_buttons(true);
     };
     audio.play();
@@ -89,12 +107,12 @@ function enable_buttons(bval) {
 <form id="speech_form">
   <textarea id="text" name="text" cols=80 rows=4>Hello Flite World!</textarea>
   <br />
-  <input type="button" value="Play(voice: kal)" onClick="speech('kal');">
-  <input type="button" value="Play(voice: kal16)" onClick="speech('kal16');">
-  <input type="button" value="Play(voice: awb)" onClick="speech('awb');">
-  <input type="button" value="Play(voice: rms)" onClick="speech('rms');">
-  <input type="button" value="Play(voice: slt)" onClick="speech('slt');">
+  <input type="button" value="Play(voice: kal)" onClick="speak('kal');">
+  <input type="button" value="Play(voice: kal16)" onClick="speak('kal16');">
+  <input type="button" value="Play(voice: awb)" onClick="speak('awb');">
+  <input type="button" value="Play(voice: rms)" onClick="speak('rms');">
+  <input type="button" value="Play(voice: slt)" onClick="speak('slt');">
 </form>
-
+Status: <span id="status" />
 </body>
 </html>

@@ -58,7 +58,7 @@ def saytime(voice_name)
   puts "voice: #{voice_name}"
 
   voice = ($cached_voices[voice_name] ||= Flite::Voice.new(voice_name))
-  voice.speech(text)
+  voice.speak(text)
 end
 
 voices = []
