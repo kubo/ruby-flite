@@ -99,14 +99,14 @@ Example:
 > ruby saytime.rb --interval 5
 > ```
 
-### [speech_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speech_web_server.rb) - Web server replying synthesized speech
+### [speaking_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speaking_web_server.rb) - Web server replying synthesized speech
 
 Usage:
 
 > Start a web server:
 > 
 > ```shell
-> ruby speech_web_server.rb
+> ruby speaking_web_server.rb
 > ```
 >
 > Open a browser and access:

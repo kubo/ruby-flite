@@ -1,12 +1,12 @@
 #! /usr/bin/env ruby
 #
-# speech_web_server.rb - Web server replying synthesized speech
+# speaking_web_server.rb - Web server replying synthesized speech
 #
 # Usage:
 #
 # 1. Start a Web server.
 #
-#    ruby speech_web_server.rb
+#    ruby speaking_web_server.rb
 #
 # 2. Access to the web server.
 #
