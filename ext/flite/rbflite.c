@@ -132,6 +132,7 @@ typedef struct {
 static VALUE rb_mFlite;
 static VALUE rb_cVoice;
 static VALUE sym_mp3;
+static VALUE sym_raw;
 static VALUE sym_wav;
 static struct timeval sleep_time_after_speaking;
 
@@ -266,10 +267,10 @@ flite_s_list_builtin_voices(VALUE klass)
  *
  *  @example
  *    # Compiled with mp3 support
- *    Flite.supported_audio_types # => [:wav, :mp3]
+ *    Flite.supported_audio_types # => [:wav, :raw, :mp3]
  *
  *    # Compiled without mp3 support
- *    Flite.supported_audio_types # => [:wav]
+ *    Flite.supported_audio_types # => [:wav, :raw]
  *
  *  @return [Array]
  */
@@ -278,9 +279,10 @@ flite_s_supported_audio_types(VALUE klass)
 {
     VALUE ary = rb_ary_new();
 
-    rb_ary_push(ary, ID2SYM(rb_intern("wav")));
+    rb_ary_push(ary, sym_wav);
+    rb_ary_push(ary, sym_raw);
 #ifdef HAVE_MP3LAME
-    rb_ary_push(ary, ID2SYM(rb_intern("mp3")));
+    rb_ary_push(ary, sym_mp3);
 #endif
     return ary;
 }
@@ -460,6 +462,23 @@ static audio_stream_encoder_t wav_encoder = {
     NULL,
 };
 
+static int
+raw_encoder_cb(const cst_wave *w, int start, int size, int last, asc_last_arg_t last_arg)
+{
+    voice_speech_data_t *vsd = (voice_speech_data_t *)ASC_LAST_ARG_TO_USERDATA(last_arg);
+
+    if (add_data(vsd, &w->samples[start], size * sizeof(short)) != 0) {
+        return CST_AUDIO_STREAM_STOP;
+    }
+    return CST_AUDIO_STREAM_CONT;
+}
+
+static audio_stream_encoder_t raw_encoder = {
+    raw_encoder_cb,
+    NULL,
+    NULL,
+};
+
 #ifdef HAVE_MP3LAME
 
 #define MAX_SAMPLE_SIZE 1024
@@ -619,7 +638,7 @@ rbflite_voice_speak(VALUE self, VALUE text)
 }
 
 /*
- * @overload to_speech(text, audio_type = :wave, opts = {})
+ * @overload to_speech(text, audio_type = :wav, opts = {})
  *
  *  Converts <code>text</code> to audio data.
  *
@@ -630,6 +649,10 @@ rbflite_voice_speak(VALUE self, VALUE text)
  *    File.binwrite('hello_flite_world.wav',
  *                  voice.to_speech('Hello Flite World!'))
  *
+ *    # Save speech as raw pcm (signed 16 bit little endian, rate 8000 Hz, mono)
+ *    File.binwrite('hello_flite_world.raw',
+ *                  voice.to_speech('Hello Flite World!', :raw))
+ *
  *    # Save speech as mp3
  *    File.binwrite('hello_flite_world.mp3',
  *                  voice.to_speech('Hello Flite World!', :mp3))
@@ -639,7 +662,7 @@ rbflite_voice_speak(VALUE self, VALUE text)
  *                  voice.to_speech('Hello Flite World!', :mp3, :bitrate => 128))
  *
  *  @param [String] text
- *  @param [Symbol] audo_type :wave or :mp3 (when mp3 support is enabled)
+ *  @param [Symbol] audo_type :wav, :raw or :mp3 (when mp3 support is enabled)
  *  @param [Hash]   opts  audio encoder options
  *  @return [String] audio data
  *  @see Flite.supported_audio_types
@@ -671,6 +694,8 @@ rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
     } else {
         if (rb_equal(audio_type, sym_wav)) {
             encoder = &wav_encoder;
+        } else if (rb_equal(audio_type, sym_raw)) {
+            encoder = &raw_encoder;
 #ifdef HAVE_MP3LAME
         } else if (rb_equal(audio_type, sym_mp3)) {
             encoder = &mp3_encoder;
@@ -803,6 +828,7 @@ Init_flite(void)
     VALUE cmu_flite_version;
 
     sym_mp3 = ID2SYM(rb_intern("mp3"));
+    sym_raw = ID2SYM(rb_intern("raw"));
     sym_wav = ID2SYM(rb_intern("wav"));
 
     rb_mFlite = rb_define_module("Flite");
