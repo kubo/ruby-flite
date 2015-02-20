@@ -133,6 +133,7 @@ static VALUE rb_mFlite;
 static VALUE rb_cVoice;
 static VALUE sym_mp3;
 static VALUE sym_wav;
+static struct timeval sleep_time_after_speaking;
 
 static buffer_list_t *buffer_list_alloc(size_t size);
 static void check_error(voice_speech_data_t *vsd);
@@ -282,6 +283,28 @@ flite_s_supported_audio_types(VALUE klass)
     rb_ary_push(ary, ID2SYM(rb_intern("mp3")));
 #endif
     return ary;
+}
+
+/*
+ * @overload sleep_time_after_speaking=(sec)
+ *
+ *  Sets sleep time after {Flite::Voice#speak}.
+ *  The default value is 0 on Unix and 0.3 on Windows.
+ *
+ *  This is workaround for voice cutoff on Windows.
+ *  The following code speaks "Hello Wor.. Hello World" without
+ *  0.3 seconds sleep.
+ *
+ *      "Hello World".speak # The last 0.3 seconds are cut off by the next speech on Windows.
+ *      "Hello World".speak
+ *
+ *  @param [Float] sec seconds to sleep
+ */
+static VALUE
+flite_s_set_sleep_time_after_speaking(VALUE klass, VALUE val)
+{
+    sleep_time_after_speaking = rb_time_interval(val);
+    return val;
 }
 
 static void
@@ -587,6 +610,11 @@ rbflite_voice_speak(VALUE self, VALUE text)
     unlock_thread(&voice->queue);
 
     check_error(&vsd);
+
+    if (sleep_time_after_speaking.tv_sec != 0 || sleep_time_after_speaking.tv_usec != 0) {
+        rb_thread_wait_for(sleep_time_after_speaking);
+    }
+
     return self;
 }
 
@@ -766,8 +794,9 @@ rbflite_voice_pathname(VALUE self)
 }
 
 #ifdef _WIN32
-__declspec(dllexport)
+__declspec(dllexport) void Init_flite(void);
 #endif
+
 void
 Init_flite(void)
 {
@@ -797,6 +826,7 @@ Init_flite(void)
 
     rb_define_singleton_method(rb_mFlite, "list_builtin_voices", flite_s_list_builtin_voices, 0);
     rb_define_singleton_method(rb_mFlite, "supported_audio_types", flite_s_supported_audio_types, 0);
+    rb_define_singleton_method(rb_mFlite, "sleep_time_after_speaking=", flite_s_set_sleep_time_after_speaking, 1);
     rb_cVoice = rb_define_class_under(rb_mFlite, "Voice", rb_cObject);
     rb_define_alloc_func(rb_cVoice, rbflite_voice_s_allocate);
 

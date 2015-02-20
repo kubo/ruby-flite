@@ -59,6 +59,10 @@ module Flite
       @@default_voice = Flite::Voice.new(name)
     end
   end
+
+  if RUBY_PLATFORM =~ /mingw32|win32/
+    self.sleep_time_after_speaking = 0.3
+  end
 end
 
 class String
