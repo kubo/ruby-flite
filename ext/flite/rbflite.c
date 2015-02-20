@@ -677,7 +677,7 @@ rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
 
     lock_thread(&voice->queue, &entry);
 
-    feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
+    flite_feat_set(voice->voice->features, "streaming_info", audio_streaming_info_val(asi));
     rb_thread_call_without_gvl(voice_speech_without_gvl, &vsd, NULL, NULL);
     flite_feat_remove(voice->voice->features, "streaming_info");
     RB_GC_GUARD(text);
@@ -758,13 +758,16 @@ rbflite_voice_pathname(VALUE self)
     if (voice->voice == NULL) {
         rb_raise(rb_eRuntimeError, "not initialized");
     }
-    pathname = get_param_string(voice->voice->features, "pathname", "");
+    pathname = flite_get_param_string(voice->voice->features, "pathname", "");
     if (pathname[0] == '\0') {
         return Qnil;
     }
     return rb_usascii_str_new_cstr(pathname);
 }
 
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
 void
 Init_flite(void)
 {

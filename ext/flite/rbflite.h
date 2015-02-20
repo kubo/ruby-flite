@@ -41,8 +41,18 @@ typedef struct {
     const char *name;
     cst_voice *(*register_)(const char *voxdir);
     cst_voice **cached;
+#ifdef RBFLITE_WIN32_BINARY_GEM
+    const char *dll_name;
+    const char *func_name;
+    const char *var_name;
+#endif
 } rbflite_builtin_voice_t;
 
+#ifdef RBFLITE_WIN32_BINARY_GEM
+cst_voice *rbfile_call_voice_register_func(rbflite_builtin_voice_t *v, const char *voxdir);
+extern rbflite_builtin_voice_t rbflite_builtin_voice_list[];
+#else
 extern const rbflite_builtin_voice_t rbflite_builtin_voice_list[];
+#endif
 
 #endif /* RBFLITE_H */

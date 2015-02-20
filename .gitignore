@@ -9,10 +9,12 @@
 /pkg/
 /spec/reports/
 /tmp/
+/*.gem
 *.a
 *.bundle
 *.def
 *.o
 *.so
+*.dll
 *~
 mkmf.log

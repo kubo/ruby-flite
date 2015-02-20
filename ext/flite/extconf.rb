@@ -2,6 +2,8 @@ require "mkmf"
 
 dir_config('flite')
 
+libs_old = $libs
+
 unless have_library('flite', 'flite_init')
   saved_libs = $libs
   puts "checkign for audio libraries depended by flite ..."
@@ -74,14 +76,35 @@ EOS
   end
   f.write <<EOS
 
-const rbflite_builtin_voice_t rbflite_builtin_voice_list[] = {
+#undef ENTRY
+#ifdef RBFLITE_WIN32_BINARY_GEM
+static cst_voice *dummy;
+#define ENTRY(name, dll_name, func_name, var_name) {#name, func_name, &dummy, #dll_name, #func_name, #var_name}
+#else
+#define ENTRY(name, dll_name, func_name, var_name) {#name, func_name, &var_name}
+#endif
+
+rbflite_builtin_voice_t rbflite_builtin_voice_list[] = {
 EOS
   voices.each do |v|
-    f.puts(%Q[    {"#{v[0]}", register_#{v[1]}, &#{v[2]}},])
+    f.puts("    ENTRY(#{v[0]}, flite_#{v[1]}.dll, register_#{v[1]}, #{v[2]}),")
   end
   f.write <<EOS
-    {NULL, NULL, NULL},
+    {NULL, },
 };
+
+#ifdef RBFLITE_WIN32_BINARY_GEM
+EOS
+  voices.each_with_index do |v, idx|
+    f.write <<EOS
+cst_voice *register_#{v[1]}(const char *voxdir)
+{
+    return rbfile_call_voice_register_func(&rbflite_builtin_voice_list[#{idx}], voxdir);
+}
+EOS
+  end
+  f.write <<EOS
+#endif
 EOS
 end
 
@@ -91,4 +114,13 @@ end
 
 RUBY_VERSION =~ /(\d+).(\d+)/
 $defs << "-DInit_flite=Init_flite_#{$1}#{$2}0"
+
+$objs = ['rbflite.o', 'rbflite_builtin_voice_list.o']
+
+if with_config('win32-binary-gem')
+  $libs = libs_old
+  $defs << "-DRBFLITE_WIN32_BINARY_GEM"
+  $objs << 'win32_binary_gem.o'
+end
+
 create_makefile("flite_#{$1}#{$2}0")

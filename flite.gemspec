@@ -15,10 +15,10 @@ Gem::Specification.new do |spec|
   spec.version       = Flite::VERSION
   spec.authors       = ["Kubo Takehiro"]
   spec.email         = ["kubo@jiubao.org"]
-  spec.extensions    = ["ext/flite/extconf.rb"] if gem_platform == Gem::Platform::RUBY
   spec.summary       = %q{a small speech synthesis library}
   spec.description   = <<EOS
-Ruby-flite is a small speech synthesis library using CMU flite[http://cmuflite.org].
+Ruby-flite is a small speech synthesis library for ruby using
+CMU flite[http://cmuflite.org].
 
 CMU Flite (festival-lite) is a small, fast run-time synthesis engine
 developed at CMU and primarily designed for small embedded machines
@@ -34,7 +34,11 @@ EOS
   files.delete('build.bat')
   files.delete('.gitignore')
   if gem_platform == 'current'
-    files << 'lib/flite_200.so' << 'lib/flite_210.so'
+    files += Dir.glob('lib/flite_*.so')
+    files += Dir.glob('lib/flite*.dll')
+    files << 'lib/libmp3lame-0.dll'
+  else
+    spec.extensions  = ["ext/flite/extconf.rb"]
   end
   spec.files         = files
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
