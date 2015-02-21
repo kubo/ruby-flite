@@ -69,44 +69,44 @@ See:
 
 ## Sample Applications
 
-### [saytime.rb](https://github.com/kubo/ruby-flite/blob/master/bin/saytime.rb) - talking clock
+### [saytime](https://github.com/kubo/ruby-flite/blob/master/bin/saytime) - talking clock
 
-This is inspired by [saytime](http://acme.com/software/saytime/).
+This is inspired by [saytime - talking clock for SPARCstations](http://acme.com/software/saytime/).
 
 Example:
 
 > Talk the current time once:
 >
 > ```shell
-> ruby saytime.rb
+> saytime
 > ```
 >
 > Talk the current time forever:
 >
 > ```shell
-> ruby saytime.rb --loop
+> saytime --loop
 > ```
 >
 > Talk the current time 5 times
 >
 > ```shell
-> ruby saytime.rb --loop 5
+> saytime --loop 5
 > ```
 >
-> Talk the current time after sleeping 5 seconds
+> Talk the current time 5 times with 10 second intervals
 >
 > ```shell
-> ruby saytime.rb --interval 5
+> saytime --loop 5 --interval 10
 > ```
 
-### [speaking_web_server.rb](https://github.com/kubo/ruby-flite/blob/master/bin/speaking_web_server.rb) - Web server replying synthesized speech
+### [speaking-web-server](https://github.com/kubo/ruby-flite/blob/master/bin/speaking-web-server) - Web server replying synthesized speech
 
 Usage:
 
 > Start a web server:
 > 
 > ```shell
-> ruby speaking_web_server.rb
+> speaking-web-server
 > ```
 >
 > Open a browser and access:

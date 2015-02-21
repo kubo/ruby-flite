@@ -1,22 +1,22 @@
 #! /usr/bin/env ruby
 #
-# saytime.rb - talking clock
+# saytime - talking clock
 #
 # Usage:
 #  # Talk the current time once
-#  ruby saytime.rb
+#  saytime
 #
 #  # Talk the current time forever
-#  ruby saytime.rb --loop
+#  saytime --loop
 #
 #  # Talk the current time 5 times
-#  ruby saytime.rb --loop 5
+#  saytime --loop 5
 #
-#  # Talk the current time after sleeping 5 seconds
-#  ruby saytime.rb --interval 5
+#  # Talk the current time 5 times with 10 second intervals
+#  saytime --loop 5 --interval 10
 #
 #  # Talk the current time with 'slt' and 'awb' voices
-#  ruby saytime.rb --voices=slt,awb
+#  saytime --voices=slt,awb
 #
 require 'flite'
 require 'optparse'

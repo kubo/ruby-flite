@@ -1,16 +1,17 @@
 #! /usr/bin/env ruby
 #
-# speaking_web_server.rb - Web server replying synthesized speech
+# speaking-web-server - Web server replying synthesized speech
 #
 # Usage:
 #
 # 1. Start a Web server.
 #
-#    ruby speaking_web_server.rb
+#    speaking-web-server
 #
 # 2. Access to the web server.
 #
 #    Open browser and access: http://HOSTNAME_OR_IP_ADDRESS:9080
+#    (Change HOSTNAME_OR_IP_ADDRESS.)
 #
 # 3. Click 'Play' buttons.
 #
