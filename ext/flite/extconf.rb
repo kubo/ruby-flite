@@ -82,6 +82,7 @@ static cst_voice *dummy;
 #define ENTRY(name, dll_name, func_name, var_name) {#name, func_name, &dummy, #dll_name, #func_name, #var_name}
 #else
 #define ENTRY(name, dll_name, func_name, var_name) {#name, func_name, &var_name}
+const
 #endif
 
 rbflite_builtin_voice_t rbflite_builtin_voice_list[] = {
