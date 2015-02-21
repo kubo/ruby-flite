@@ -820,6 +820,35 @@ rbflite_voice_pathname(VALUE self)
     return rb_usascii_str_new_cstr(pathname);
 }
 
+/*
+ * @overload inspect
+ *
+ *  Returns the value as a string for inspection.
+ *
+ *  @return [String]
+ *  @private
+ */
+static VALUE
+rbflite_voice_inspect(VALUE self)
+{
+    rbflite_voice_t *voice = DATA_PTR(self);
+    const char *class_name = rb_obj_classname(self);
+    const char *voice_name;
+    const char *pathname;
+
+    if (voice->voice == NULL) {
+        return rb_sprintf("#<%s: not initialized>", class_name);
+    }
+    voice_name = voice->voice->name;
+
+    pathname = flite_get_param_string(voice->voice->features, "pathname", "");
+    if (pathname[0] == '\0') {
+        return rb_sprintf("#<%s: %s>", class_name, voice_name);
+    } else {
+        return rb_sprintf("#<%s: %s (%s)>", class_name, voice_name, pathname);
+    }
+}
+
 #ifdef _WIN32
 __declspec(dllexport) void Init_flite(void);
 #endif
@@ -865,4 +894,5 @@ Init_flite(void)
     rb_define_method(rb_cVoice, "to_speech", rbflite_voice_to_speech, -1);
     rb_define_method(rb_cVoice, "name", rbflite_voice_name, 0);
     rb_define_method(rb_cVoice, "pathname", rbflite_voice_pathname, 0);
+    rb_define_method(rb_cVoice, "inspect", rbflite_voice_inspect, 0);
 }
