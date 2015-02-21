@@ -17,33 +17,32 @@
 require 'webrick'
 require 'flite'
 
-html_content = DATA.read.sub(/FLITE_SUPPORT_MP3/, (Flite.supported_audio_types.include? :mp3).to_s)
+def start_server(html_content)
+  srv = WEBrick::HTTPServer.new({:Port => 9080})
 
-srv = WEBrick::HTTPServer.new({:Port => 9080})
+  srv.mount_proc('/') do |req, res|
+    h = req.query
+    if h['text']
+      audio_type = if h['type'] == 'mp3'
+                     :mp3
+                   else
+                     :wav
+                   end
+      res['Content-type'] = "audio/#{audio_type}"
+      res['Content-Disposition'] = %Q{attachment; filename="audio.#{audio_type}"}
 
-srv.mount_proc('/') do |req, res|
-  h = req.query
-  if h['text']
-    audio_type = if h['type'] == 'mp3'
-                   :mp3
-                 else
-                   :wav
-                 end
-    res['Content-type'] = "audio/#{audio_type}"
-    res['Content-Disposition'] = %Q{attachment; filename="audio.#{audio_type}"}
-
-    voice = Flite::Voice.new(h['voice'] || 'kal')
-    res.body = voice.to_speech(h['text'], audio_type)
-  else
-    res['Content-type'] = 'text/html'
-    res.body = html_content
+      voice = Flite::Voice.new(h['voice'] || 'kal')
+      res.body = voice.to_speech(h['text'], audio_type)
+    else
+      res['Content-type'] = 'text/html'
+      res.body = html_content
+    end
   end
+  trap("INT"){ srv.shutdown }
+  srv.start
 end
 
-trap("INT"){ srv.shutdown }
-srv.start
-
-__END__
+html_content = <<EOS
 <html>
 <head>
 <title>Flite CGI</title>
@@ -54,13 +53,13 @@ audio_type = 'wav';
 function check_audio_type() {
   var audio = new Audio;
   if (audio.canPlayType('audio/wav') == '') {
-    if (FLITE_SUPPORT_MP3 && audio.canPlayType('audio/mp3') != '') {
+    if (#{Flite.supported_audio_types.include? :mp3} && audio.canPlayType('audio/mp3') != '') {
       audio_type = 'mp3';
     } else {
       var text = document.getElementById('text');
       text.disabled = true;
       enable_buttons(false);
-      alert('Cannot play audio/wav in this browser.\nUse Chrome, Firefox, Safari or Opera.');
+      alert('Cannot play audio/wav in this browser.\\nUse Chrome, Firefox, Safari or Opera.');
     }
   }
 }
@@ -116,3 +115,6 @@ function enable_buttons(bval) {
 Status: <span id="status" />
 </body>
 </html>
+EOS
+
+start_server(html_content)
