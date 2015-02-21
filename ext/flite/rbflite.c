@@ -130,6 +130,8 @@ typedef struct {
 } audio_stream_encoder_t;
 
 static VALUE rb_mFlite;
+static VALUE rb_eFliteError;
+static VALUE rb_eFliteRuntimeError;
 static VALUE rb_cVoice;
 static VALUE sym_mp3;
 static VALUE sym_raw;
@@ -230,13 +232,13 @@ static void check_error(voice_speech_data_t *vsd)
     case RBFLITE_ERROR_OUT_OF_MEMORY:
         rb_raise(rb_eNoMemError, "out of memory while writing speech data");
     case RBFLITE_ERROR_LAME_INIT_PARAMS:
-        rb_raise(rb_eRuntimeError, "lame_init_params() error");
+        rb_raise(rb_eFliteRuntimeError, "lame_init_params() error");
     case RBFLITE_ERROR_LAME_ENCODE_BUFFER:
-        rb_raise(rb_eRuntimeError, "lame_encode_buffer() error");
+        rb_raise(rb_eFliteRuntimeError, "lame_encode_buffer() error");
     case RBFLITE_ERROR_LAME_ENCODE_FLUSH:
-        rb_raise(rb_eRuntimeError, "lame_encode_flush() error");
+        rb_raise(rb_eFliteRuntimeError, "lame_encode_flush() error");
     default:
-        rb_raise(rb_eRuntimeError, "Unkown error %d", vsd->error);
+        rb_raise(rb_eFliteRuntimeError, "Unkown error %d", vsd->error);
     }
 }
 
@@ -547,7 +549,7 @@ static void *mp3_encoder_init(VALUE opts)
     lame_global_flags *gf = lame_init();
 
     if (gf == NULL) {
-        rb_raise(rb_eRuntimeError, "Failed to initialize lame");
+        rb_raise(rb_eFliteRuntimeError, "Failed to initialize lame");
     }
 
     lame_set_bWriteVbrTag(gf, 0);
@@ -611,7 +613,7 @@ rbflite_voice_speak(VALUE self, VALUE text)
     thread_queue_entry_t entry;
 
     if (voice->voice == NULL) {
-        rb_raise(rb_eRuntimeError, "not initialized");
+        rb_raise(rb_eFliteRuntimeError, "%s is not initialized", rb_obj_classname(self));
     }
 
     vsd.voice = voice->voice;
@@ -684,7 +686,7 @@ rbflite_voice_to_speech(int argc, VALUE *argv, VALUE self)
     char *ptr;
 
     if (voice->voice == NULL) {
-        rb_raise(rb_eRuntimeError, "not initialized");
+        rb_raise(rb_eFliteRuntimeError, "%s is not initialized", rb_obj_classname(self));
     }
 
     rb_scan_args(argc, argv, "12", &text, &audio_type, &opts);
@@ -781,7 +783,7 @@ rbflite_voice_name(VALUE self)
     rbflite_voice_t *voice = DATA_PTR(self);
 
     if (voice->voice == NULL) {
-        rb_raise(rb_eRuntimeError, "not initialized");
+        rb_raise(rb_eFliteRuntimeError, "%s is not initialized", rb_obj_classname(self));
     }
     return rb_usascii_str_new_cstr(voice->voice->name);
 }
@@ -809,7 +811,7 @@ rbflite_voice_pathname(VALUE self)
     const char *pathname;
 
     if (voice->voice == NULL) {
-        rb_raise(rb_eRuntimeError, "not initialized");
+        rb_raise(rb_eFliteRuntimeError, "%s is not initialized", rb_obj_classname(self));
     }
     pathname = flite_get_param_string(voice->voice->features, "pathname", "");
     if (pathname[0] == '\0') {
@@ -832,6 +834,8 @@ Init_flite(void)
     sym_wav = ID2SYM(rb_intern("wav"));
 
     rb_mFlite = rb_define_module("Flite");
+    rb_eFliteError = rb_define_class_under(rb_mFlite, "Error", rb_eStandardError);
+    rb_eFliteRuntimeError = rb_define_class_under(rb_mFlite, "Runtime", rb_eFliteError);
 
     cmu_flite_version = rb_usascii_str_new_cstr(FLITE_PROJECT_VERSION);
     OBJ_FREEZE(cmu_flite_version);
