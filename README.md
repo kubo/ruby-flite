@@ -9,26 +9,28 @@ voices built using the [FestVox](http://festvox.org/) suite of voice building to
 
 ## Supported versions
 
-* ruby 1.9.3 and uppper
+* ruby 2.0.0 and uppper
 * CMU Flite 1.4 and 2.0.
 
 ## Installation
 
-Install [CMU Flite](http://cmuflite.org):
+Install [CMU Flite](http://cmuflite.org) and (optionally) [LAME](http://lame.sourceforge.net/).
 
 ```shell
 # On ubuntu
 sudo apt-get install flite1-dev
+sudo apt-get install libmp3lame-dev # for mp3 support (optionally)
 
 # On redhat
-yum install flite flite-devel
+yum install flite-devel
+yum install libmp3lame-devel # for mp3 support (optionally)
 
 # On Windows
-# You have no need to install CMU Flite if you use rubies distributed by rubyinstaller.org.
-# Binary gems for the rubies include CMU Flite.
+# You have no need to install CMU Flite and LAME if you use rubies distributed by
+# rubyinstaller.org. Binary gems for the rubies include them.
 
 # Others
-# You need to install it by yourself.
+# You need to install them by yourself.
 ```
 
 And then execute:
@@ -49,11 +51,12 @@ require 'flite'
 # Speak "Hello World!"
 "Hello World!".speak
 
-# convert to a WAVE file
-"Hello World!".to_speech
-
-# Create a speech data and save as "hello_world.wav"
+# Create a wav data and save as "hello_world.wav"
 File.binwrite("hello_world.wav", "Hello World!".to_speech)
+
+# Create a mp3 data and save as "hello_world.mp3"
+# This works if mp3 support is enabled.
+File.binwrite("hello_world.mp3", "Hello World!".to_speech(:mp3))
 
 # Change the voice used for String#speak and String#to_speech
 Flite.default_voice = 'rms'
@@ -118,10 +121,13 @@ Usage:
 
 ## Restrictions
 
-* Ruby process doesn't terminate while talking to the speaker.
+* Ruby process doesn't terminate while talking.
 
 * When an error occurs in CMU Flite, the error message is outputted to
   the standard error.
+
+* When a fatal error occurs in CMU Flite, the error message is outputted to
+  the standard error and the process is terminated. (CMU Flite calls `exit(-1)`...)
 
 ## NEWS
 
@@ -132,9 +138,10 @@ audio data instead of speaking. Use {String#speak} to speak a text.
 
 ## License
 
-* Ruby Flite itself is licensed under 2-clause BSD-style license.
-* CMU Flite is licensed under BSD-like license.
+* Ruby Flite is licensed under 2-clause BSD-style license.
+* CMU Flite bundled in Windows binary gems is licensed under BSD-like license.
   See http://www.festvox.org/flite/download.html
+* LAME bundled in Windows binary gems is licensed under LGPL.
 
 ## Related Works
 
