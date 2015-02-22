@@ -864,7 +864,7 @@ Init_flite(void)
 
     rb_mFlite = rb_define_module("Flite");
     rb_eFliteError = rb_define_class_under(rb_mFlite, "Error", rb_eStandardError);
-    rb_eFliteRuntimeError = rb_define_class_under(rb_mFlite, "Runtime", rb_eFliteError);
+    rb_eFliteRuntimeError = rb_define_class_under(rb_mFlite, "RuntimeError", rb_eFliteError);
 
     cmu_flite_version = rb_usascii_str_new_cstr(FLITE_PROJECT_VERSION);
     OBJ_FREEZE(cmu_flite_version);
