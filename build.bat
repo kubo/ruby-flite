@@ -27,12 +27,14 @@ PATH=%PATH%;%GIT_EXE_DIR%
 
 call %DEVKIT_64_DIR%\devkitvars.bat
 del lib\flite_*.so
+call :compile flite_220.so win64 %PREFIX_64% 221-64
 call :compile flite_210.so win64 %PREFIX_64% 213p242-64
 call :compile flite_200.so win64 %PREFIX_64% 200p0-64
 call :build_gem win64 %PREFIX_64%
 
 call %DEVKIT_32_DIR%\devkitvars.bat
 del lib\flite_*.so
+call :compile flite_220.so win32 %PREFIX_32% 221-32
 call :compile flite_210.so win32 %PREFIX_32% 213p242-32
 call :compile flite_200.so win32 %PREFIX_32% 200p0-32
 call :build_gem win32 %PREFIX_32%

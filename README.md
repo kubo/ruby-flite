@@ -131,6 +131,11 @@ Usage:
 
 ## NEWS
 
+### 0.1.1
+
+Nothing is changed except binary gems for Windows, which bundle precompiled
+extension libraries for ruby 2.2.1.
+
 ### 0.1.0
 
 Almost methods were changed. Especially {String#to_speech} returns WAV
