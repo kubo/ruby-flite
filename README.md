@@ -133,8 +133,8 @@ Usage:
 
 ### 0.1.1
 
-Nothing is changed except binary gems for Windows, which bundle precompiled
-extension libraries for ruby 2.2.1.
+* The exception class name Flite::Runtime was renamed to to Flite::RuntimeError.
+* Binary gems for Windows bundle precompiled extension libraries for ruby 2.2.1.
 
 ### 0.1.0
 
