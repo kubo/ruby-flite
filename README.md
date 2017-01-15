@@ -16,22 +16,26 @@ voices built using the [FestVox](http://festvox.org/) suite of voice building to
 
 Install [CMU Flite](http://cmuflite.org) and (optionally) [LAME](http://lame.sourceforge.net/).
 
+On ubuntu
 ```shell
-# On ubuntu
 sudo apt-get install flite1-dev
 sudo apt-get install libmp3lame-dev # for mp3 support (optionally)
+```
 
-# On redhat
+On redhat
+```shell
 yum install flite-devel
 yum install libmp3lame-devel # for mp3 support (optionally)
-
-# On Windows
-# You have no need to install CMU Flite and LAME if you use rubies distributed by
-# rubyinstaller.org. Binary gems for the rubies include them.
-
-# Others
-# You need to install them by yourself.
 ```
+
+On Windows
+You have no need to install CMU Flite and LAME if you use ruby 2.0.x,
+2.1.x or 2.2.x distributed by [rubyinstaller.org](http://rubyinstaller.org/). Binary gems for the
+rubies include them. If you use other ruby versions, you need to
+install CMU Flite, LAME and [Development Kit](http://rubyinstaller.org/downloads/).
+
+Others
+You need to install them by yourself.
 
 And then execute:
 
